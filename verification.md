@@ -35,5 +35,25 @@ This verifies startup and one connection under Docker resource constraints;
 it is not a production load test or a Scaleway platform test. Scaleway gVisor,
 ingress WebSocket behavior, request timeouts and real traffic still need to be
 checked after deployment. No Scaleway resources have been created or changed.
+Source repository visibility and GHCR package visibility are independent.
 For the private image, copy it to a Scaleway Container Registry in the same
-Project before deployment, following README.md.
+Project before deployment, following [the Chinese deployment guide](docs/deploy.zh-CN.md).
+
+## Public source review (2026-11-11)
+
+- Gitleaks v8.30.1 scanned both existing commits with all reachable Git history:
+  no secrets detected.
+- Gitleaks separately scanned the complete homepage HTML and the successful
+  GitHub Actions build log: no secrets detected.
+- Manual review found runtime credentials are supplied through environment
+  variables. The fixed UUID and paths in the workflow and smoke script are
+  explicitly documented CI fixtures, not production credentials.
+- No committed `.env`, private key, API key or local configuration was found.
+- Local audit tools and reports under `.codex/` are ignored by Git and Docker.
+- The saved homepage contains public article content and referral links;
+  these are not service credentials. No email address was found in the HTML.
+- GHCR anonymous access returned `401` during this review. Making the source
+  repository public does not change the package visibility.
+
+These are automated scans and a targeted manual review, not a guarantee that
+all possible sensitive content can be recognized.

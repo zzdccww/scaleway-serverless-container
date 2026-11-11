@@ -1,72 +1,48 @@
-# Scaleway Serverless Containers deployment
+# Scaleway Serverless Containers 部署项目
 
-This repository packages the Node.js WebSocket service for Scaleway Serverless
-Containers. GitHub Actions builds a Node.js 24 `linux/amd64` image, verifies it
-with a 128 MB memory limit and 0.07 CPU limit, publishes it to GHCR, and uploads
-a Docker image tarball with a SHA-256 checksum as a workflow artifact.
+基于 Node.js 的 HTTP / WebSocket 服务，适配 Scaleway Serverless Containers。
+GitHub Actions 负责构建 `linux/amd64` 镜像，本地无需构建。
 
-## Scaleway settings
+**完整操作步骤见：[中文部署说明](docs/deploy.zh-CN.md)。**
 
-- Architecture: `x86_64` / `linux/amd64`
-- CPU: `70 mvCPU`
-- Memory: `128 MB`
-- Container port: `8080`
-- Environment variable: `PORT=8080`
-- Health check: `GET /healthz`
-- Recommended minimum scale: `0`
-- Maximum scale for a single instance budget: `1`
-- Protocol: `HTTP/1.1` (WebSocket uses HTTP Upgrade)
+## 已完成的适配
 
-The process binds to the `PORT` environment variable and does not require a
-public IP. Set a fixed `UUID` and `WSPATH` in secret environment variables so
-clients continue to work across restarts. Set `DOMAIN` to the assigned
-Scaleway hostname without a scheme or port; public TLS terminates at Scaleway
-on port 443. `SUB_PATH` optionally enables a subscription route and defaults to
-disabled. Keep Telegram credentials in Scaleway secret environment variables
-rather than committing them. The service can print subscription credentials
-to startup logs, so restrict access to logs.
+- 使用 Node.js 24 Alpine，以非 root 用户运行。
+- 监听 `0.0.0.0:$PORT`，默认端口 `8080`。
+- 提供 `GET /healthz` 健康检查，默认关闭源码自毁逻辑。
+- 镜像使用锁文件安装依赖，预设 Node.js 堆内存上限为 48 MB。
+- GitHub Actions 在 `70 mvCPU / 128 MB` 限制下验证 HTTP、订阅路由和 WebSocket TCP 转发。
+- 检查通过后推送 GHCR，并生成镜像 `.tar` 和 SHA-256 校验文件。
 
-`SELF_DESTRUCT` defaults to `false` for container operation. Set it to `true`
-only when the legacy self-destruction behavior is explicitly required.
+## 镜像和下载
 
-## Image locations
+| 项目 | 地址 |
+| --- | --- |
+| GHCR 镜像 | `ghcr.io/zzdccww/scaleway-serverless-container:latest` |
+| 已验证的固定版本 | `ghcr.io/zzdccww/scaleway-serverless-container:sha-0a2ddee5ba841402589ca2ffaace2b8a275ac767` |
+| 构建记录 | [GitHub Actions](https://github.com/zzdccww/scaleway-serverless-container/actions) |
+| 已验证镜像下载 | [镜像 tar 包与校验文件](https://github.com/zzdccww/scaleway-serverless-container/actions/runs/42987224915/artifacts/13839478683) |
+| 验证结果 | [verification.md](verification.md) |
 
-After a successful workflow on `main`, use:
+源码仓库与 GHCR 包的可见性独立。**源码仓库公开不会自动公开 GHCR 镜像。**
+本次检查时 GHCR 仍为私有，匿名拉取返回 `401`；此时可下载 Actions 镜像产物，
+或登录 GHCR 后复制镜像到 Scaleway Container Registry。镜像产物保留 14 天，
+下载通常需要登录 GitHub；过期后可在 Actions 页面手动重新运行构建。
 
-```text
-ghcr.io/zzdccww/scaleway-serverless-container:latest
-```
+## 推荐起步配置
 
-The workflow run also exposes `serverless-containers-image-<commit>` as a
-downloadable artifact. Load it locally with:
+| 配置 | 值 |
+| --- | --- |
+| 架构 | `linux/amd64` |
+| CPU / 内存 | `70 mvCPU / 128 MB` |
+| 容器端口 | `8080` |
+| 协议 | `HTTP/1.1` |
+| 最小 / 最大实例数 | `0 / 1` |
+| 健康检查 | HTTP `GET /healthz` |
 
-```bash
-sha256sum --check serverless-containers-image.tar.sha256
-docker load --input serverless-containers-image.tar
-```
+部署时设置固定的 `UUID`、`WSPATH`，以及 Scaleway 分配的域名 `DOMAIN`。
+实际凭据放在 Scaleway 的 Secret environment variables 中，不要提交到仓库。
+示例 UUID 和路径仅供 CI 验证，不能作为生产配置。
 
-The image is built by GitHub Actions; no local Docker build is required.
-
-## Next deployment step
-
-The repository and GHCR package are private by default. To deploy without
-making them public, copy the image to a Scaleway Container Registry namespace
-in the same Project as the Serverless Container. This does not rebuild it.
-For example, after logging in to both registries with your own credentials:
-
-```bash
-docker pull ghcr.io/zzdccww/scaleway-serverless-container:sha-<full-commit>
-docker tag ghcr.io/zzdccww/scaleway-serverless-container:sha-<full-commit> rg.fr-par.scw.cloud/<namespace>/node-ws:<full-commit>
-docker push rg.fr-par.scw.cloud/<namespace>/node-ws:<full-commit>
-```
-
-Select the image in Serverless Containers, set the environment variables and
-port above, and check `/healthz` and a real WebSocket client connection. To
-roll back, select the previous immutable commit image and deploy again.
-The workflow does not create Scaleway resources or deploy the application.
-The minimum resource check covers startup and one connection; concurrent
-production traffic can need more CPU or memory. WebSocket lifetime is also
-subject to the platform request timeout (maximum 60 minutes).
-
-References: [Scaleway FAQ](https://www.scaleway.com/en/docs/serverless-containers/faq/),
-[container limitations](https://www.scaleway.com/en/docs/serverless-containers/reference-content/containers-limitations/).
+以上最小资源配置已验证启动和单连接；实际并发负载仍需部署后测试。
+GitHub Actions 只构建镜像，不会创建 Scaleway 资源或自动部署应用。
