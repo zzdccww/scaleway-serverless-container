@@ -1,0 +1,95 @@
+name: Build Serverless Containers image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build linux/amd64 image on GitHub
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify HTTP and WebSocket under minimum resource limits
+        run: |
+          set -euo pipefail
+          docker run --detach --name scaleway-smoke --network host \
+            --memory 128m --memory-swap 128m --cpus 0.07 --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --env PORT=18080 --env DOMAIN=example.com \
+            --env UUID=39d6ae78-271c-4e73-8796-c1a43b9d6e58 \
+            --env WSPATH=ci-smoke --env SUB_PATH=ci-sub \
+            "${IMAGE_NAME}:sha-${GITHUB_SHA}"
+          docker exec --interactive --user root --env NODE_OPTIONS= scaleway-smoke \
+            node -e 'require("fs").writeFileSync("/tmp/smoke.js", require("fs").readFileSync(0))' < scripts/smoke.js
+          docker exec --env NODE_OPTIONS= --env NODE_PATH=/app/node_modules \
+            --env SMOKE_URL=http://127.0.0.1:18080 scaleway-smoke node /tmp/smoke.js
+          docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' scaleway-smoke
+          docker stop --time 15 scaleway-smoke
+          test "$(docker inspect --format '{{.State.ExitCode}}' scaleway-smoke)" = 0
+          test "$(docker inspect --format '{{.State.OOMKilled}}' scaleway-smoke)" = false
+
+      - name: Publish verified image and export Docker tarball
+        run: |
+          set -euo pipefail
+          docker push "${IMAGE_NAME}:sha-${GITHUB_SHA}"
+          if [ "${GITHUB_REF}" = refs/heads/main ]; then
+            docker tag "${IMAGE_NAME}:sha-${GITHUB_SHA}" "${IMAGE_NAME}:latest"
+            docker push "${IMAGE_NAME}:latest"
+          fi
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            docker tag "${IMAGE_NAME}:sha-${GITHUB_SHA}" "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+            docker push "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+          fi
+          docker save "${IMAGE_NAME}:sha-${GITHUB_SHA}" -o /tmp/serverless-containers-image.tar
+          cd /tmp
+          sha256sum serverless-containers-image.tar > serverless-containers-image.tar.sha256
+
+      - name: Upload image tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: serverless-containers-image-${{ github.sha }}
+          path: |
+            /tmp/serverless-containers-image.tar
+            /tmp/serverless-containers-image.tar.sha256
+          retention-days: 14
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs scaleway-smoke || true
+
+      - name: Clean up smoke container
+        if: always()
+        run: docker rm --force scaleway-smoke || true

@@ -1,0 +1,9 @@
+.git
+.github
+node_modules
+npm-debug.log*
+*.tar
+*.tar.gz
+.env
+.env.*
+README.md

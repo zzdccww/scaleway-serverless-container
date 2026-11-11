@@ -1,0 +1,20 @@
+{
+  "name": "node-ws",
+  "version": "2.0.0",
+  "description": "Node.js Server",
+  "main": "index.js",
+  "author": "codex",
+  "license": "GPL-3.0",
+  "private": false,
+  "scripts": {
+    "start": "node index.js",
+    "check": "node --check index.js && node --check scripts/smoke.js",
+    "smoke": "node scripts/smoke.js"
+  },
+  "dependencies": {
+    "ws": "^8.14.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
