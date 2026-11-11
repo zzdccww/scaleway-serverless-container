@@ -23,7 +23,7 @@ node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"
 
 ### 方案 A：将现成镜像复制到 Scaleway Container Registry
 
-这是当前私有 GHCR 镜像可用的方式，也是 Scaleway 官方推荐的镜像来源。
+这是保持部署镜像独立于外部 Registry 的方式，也是 Scaleway 官方推荐的镜像来源。
 Scaleway Container Registry 的 namespace 必须与 Serverless Container 位于同一 Project。
 
 1. 在 Scaleway 控制台进入 **Container Registry**，选择区域并创建 namespace。
@@ -66,10 +66,11 @@ docker push rg.fr-par.scw.cloud/<你的-namespace>/node-ws:0a2ddee
 
 ### 方案 B：从公开的 GHCR 镜像直接部署
 
-**仓库公开与镜像公开是两项设置。** 本次检查时，GHCR 包仍为私有，不能直接使用此方案。
+**仓库公开与镜像公开是两项设置。** 2026-11-11 部署复查时，GHCR 包已公开，
+已验证固定版本镜像可以匿名拉取，因此本次实际部署采用此方案。
 Scaleway 支持外部公开 Registry，不支持外部私有 Registry。
 
-如仓库所有者另外将 GHCR 包公开，可在 GitHub 个人主页的 **Packages** 中选择镜像，
+其他镜像若仍为私有，可由仓库所有者在 GitHub 个人主页的 **Packages** 中选择镜像，
 进入 **Package settings → Change package visibility → Public**。
 确认无需登录即可拉取镜像后，在 Scaleway 选择 **External Container Registry** 并填写：
 
@@ -91,7 +92,7 @@ GitHub Actions 后续构建继续向同一个 GHCR 包推送，不会自动修�
 | 配置项 | 起步值 | 说明 |
 | --- | --- | --- |
 | 架构 | `linux/amd64` / x86_64 | 已构建镜像的目标平台 |
-| CPU | `70 mvCPU` | 当前最低 CPU 档位 |
+| CPU | `100 mvCPU` | 本次华沙控制台最低可选值；FAQ 标注 70，但界面没有该选项 |
 | 内存 | `128 MB` | 已通过启动和单连接验证 |
 | 容器端口 | `8080` | 应用读取平台注入的 `PORT` |
 | 协议 | `HTTP/1.1` | WebSocket 通过 HTTP Upgrade 建立连接 |
@@ -148,7 +149,19 @@ CI 中使用的固定 UUID、`ci-smoke` 和 `ci-sub` 均为公开测试数据。
 - CPU：`0.07 × 31 × 86400 = 187,488 vCPU-s`。
 - 内存：`0.125 × 31 × 86400 = 334,800 GB-s`。
 
-两项均在该额度内，但这只是该单实例的估算；其他计算资源消耗、部署期间的实例重叠、
+两项均在该额度内。但本次华沙控制台最低实际可选 CPU 为 `100 mvCPU`，部署采用
+`100 mvCPU / 128 MB`，因此上述 70 mvCPU 的免费整月估算不适用于实际部署：
+
+| 持续运行时间 | CPU 消耗 | 超出 200,000 vCPU-s 的部分 |
+| --- | --- | --- |
+| 30 天 | `259,200 vCPU-s` | `59,200 vCPU-s` |
+| 31 天 | `267,840 vCPU-s` | `67,840 vCPU-s` |
+
+100 mvCPU 在无其他消耗时可覆盖约 555.6 小时，即 23.15 天的累计运行时长；
+内存 128 MB 的上述消耗不变。当前部署设置实例数 `0–1`，可在空闲时缩容，
+但不能保证持续访问下整月零费用。请以当前定价、实际用量和账单为准。
+
+这只是该单实例的估算；其他计算资源消耗、部署期间的实例重叠、
 后续资源上调以及额外产品费用需要另外考虑。免费额度是按月计算，不是无限使用承诺。
 Scaleway Container Registry 等独立产品也不能默认视为免费，应查看各自价格及账单。
 

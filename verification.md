@@ -57,3 +57,27 @@ Project before deployment, following [the Chinese deployment guide](docs/deploy.
 
 These are automated scans and a targeted manual review, not a guarantee that
 all possible sensitive content can be recognized.
+
+## Actual Scaleway deployment (2026-11-11)
+
+- Deployed the verified immutable GHCR image in `pl-waw` using the existing
+  Serverless Containers namespace; no additional registry, network or gateway
+  was provisioned.
+- The GHCR package was already public at deployment time. Anonymous manifest
+  retrieval returned HTTP 200 with the expected image digest.
+- The console's lowest selectable CPU was 100 mVCPU, for both sandbox choices;
+  70 mVCPU was not offered. The actual deployment uses 100 mVCPU / 128 MB,
+  sandbox v2, min-scale 0 and max-scale 1.
+- Runtime configuration: port 8080, HTTP/1.1, public invocation, HTTPS only,
+  3600-second request timeout, HTTP `/healthz` liveness probe.
+- Newly generated UUID, WebSocket path and subscription path are stored as
+  Scaleway secrets. Client access information remains only in the ignored
+  local `.codex/scaleway-access.json`, outside the public repository.
+- The console reports Ready; public health and homepage return HTTP 200,
+  an unknown path returns 404, and the subscription route returns the expected
+  configured identity, domain and WebSocket path.
+- An external WSS/VLESS client connected through the deployed endpoint and
+  forwarded an HTTP request to example.com:80 successfully.
+- This is a smoke check, not a concurrency or 60-minute connection test.
+- At 100 mVCPU, continuous full-month operation exceeds 200,000 vCPU-s;
+  scale-to-zero reduces runtime but does not guarantee zero cost.

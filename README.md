@@ -25,8 +25,8 @@ GitHub Actions 负责构建 `linux/amd64` 镜像，本地无需构建。
 | 验证结果 | [verification.md](verification.md) |
 
 源码仓库与 GHCR 包的可见性独立。**源码仓库公开不会自动公开 GHCR 镜像。**
-本次检查时 GHCR 仍为私有，匿名拉取返回 `401`；此时可下载 Actions 镜像产物，
-或登录 GHCR 后复制镜像到 Scaleway Container Registry。镜像产物保留 14 天，
+2026-11-11 部署复查时，GHCR 包已公开，固定版本匿名拉取返回 `200`。
+可以直接使用外部公开镜像，或复制到 Scaleway Container Registry。镜像产物保留 14 天，
 下载通常需要登录 GitHub；过期后可在 Actions 页面手动重新运行构建。
 
 ## 推荐起步配置
@@ -34,7 +34,7 @@ GitHub Actions 负责构建 `linux/amd64` 镜像，本地无需构建。
 | 配置 | 值 |
 | --- | --- |
 | 架构 | `linux/amd64` |
-| CPU / 内存 | `70 mvCPU / 128 MB` |
+| CPU / 内存 | 按控制台可用档位；本次华沙实际部署为 `100 mvCPU / 128 MB` |
 | 容器端口 | `8080` |
 | 协议 | `HTTP/1.1` |
 | 最小 / 最大实例数 | `0 / 1` |
@@ -44,5 +44,7 @@ GitHub Actions 负责构建 `linux/amd64` 镜像，本地无需构建。
 实际凭据放在 Scaleway 的 Secret environment variables 中，不要提交到仓库。
 示例 UUID 和路径仅供 CI 验证，不能作为生产配置。
 
-以上最小资源配置已验证启动和单连接；实际并发负载仍需部署后测试。
+镜像已在 Docker 的 `70 mvCPU / 128 MB` 限制下验证启动和单连接；本次 Scaleway
+华沙控制台最低可选 CPU 为 `100 mvCPU`，已完成实际部署与 WSS/VLESS 转发验证。
+按 `100 mvCPU` 连续运行整月可能超出 CPU 免费额度，详见中文说明。
 GitHub Actions 只构建镜像，不会创建 Scaleway 资源或自动部署应用。
